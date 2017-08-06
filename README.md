@@ -54,3 +54,14 @@
 - 2017.07.22
 - Attendees : Go Myeongjun, Jo Gwanghyeon, Kang Seoyun, Lee Geonhui, Lee Jeonghyeon, Park Daeyun, Song Wonsik
 - Notes : [Lable of source code] not_relocated:, wont_overwrite:
+
+### Week 12
+- 2017.07.29
+- Attendees : Go Myeongjun, Jo Gwanghyeon, Kang Seoyun, Park Daeyun
+- Notes : Review not_angel: of lable, drawing and checking memory
+
+### Week 13
+- 2017.08.05
+- Attendees : Go Myeongjun, Jo Gwanghyeon, Kang Seoyun, Lee Jeonghyeon, Park Daeyun, Song Wonsik, Yoo Jihyeok
+- Notes : [Lable of source code] lookup_processor_type:, vet_atags:, fixup_smp:, create_page_table:
+
