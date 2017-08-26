@@ -65,3 +65,7 @@
 - Attendees : Go Myeongjun, Jo Gwanghyeon, Kang Seoyun, Lee Jeonghyeon, Park Daeyun, Song Wonsik, Yoo Jihyeok
 - Notes : [Lable of source code] lookup_processor_type:, vet_atags:, fixup_smp:, create_page_table:
 
+### Week 14
+- 2017.08.12
+- Attendees : Go Myeongjun, Jo Gwanghyeon, Kang Seoyun, Lee Jeonghyeon, Park Daeyun, Song Wonsik, Yoo Jihyeok
+- Notes : [Lable of source code] v7_ca7mp_setup:, enable_mmu:, mmap_swiched:
