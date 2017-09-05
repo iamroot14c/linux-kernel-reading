@@ -1,9 +1,15 @@
 # Linux Kernel Reading
 
+### Week 16
+- 2017.09.02
+- Attendees : Go Myeongjun, Jo Gwanghyeon, Lee Jeonghyeon, Park Daeyun, Song Wonsik
+- Notes : [source code] lockedp_init(), set_task_stack_end_magic(), earyly_trap_init() 
+
+
 ### Week 15
 - 2017.08.26
 - Attendees : Go Myeongjun, Jo Gwanghyeon, Kang Seoyun, Lee Jeonghyeon, Park Daeyun
-- Notes : Review cache_on:, setup_mmu:(Initialise the pasge tables to use cache)
+- Notes : Review cache_on:, setup_mmu:(Initialise the page tables to use cache)
 
 ### Week 14
 - 2017.08.12
