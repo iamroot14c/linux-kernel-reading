@@ -496,20 +496,24 @@ SECTIONS					// SECTION   섹션들을 나누어놓고 나중에 하나의 실행파일로 만든다
 			ldr	sp, [r0, #28]				// sp에 LC0 의 8번째 .L_user_stack_end 저장
 
 			sub	r0, r0, r1				// r0: LC0의 offset 값 저장
-			add	r6, r6, r0				// r6: _edata:  data 영역의 끝주소
-			add	r10, r10, r0				// r10: 압축된 커널의 끝주소
+			add	r6, r6, r0				// r6: _edata:  data 영역의 끝 주소
+			add	r10, r10, r0				// r10: 압축해제된 커널의 길이가 들어있는 곳의 주소 + offset
+									=> little endian 방식으로 기록된다.
 
-			ldrb	r9, [r10, #0]				// r9: 
-			ldrb	lr, [r10, #1]				// lr: 
-			orr	r9, r9, lr, lsl #8			// r9: 
-			ldrb	lr, [r10, #2]
-			ldrb	r10, [r10, #3]
-			orr	r9, r9, lr, lsl #16
-			orr	r9, r9, r10, lsl #24			// r9: 실제 커널 사이즈
+			/** little endian 으로 기록된 값을 제대로 바꾸기 위해 쪼개는 과정 **/
+			ldrb	r9, [r10, #0]				// r9: r10:압축해제된 커널의 길이가 들어있는 곳의 주소	<< 0x3d1323
+									=> r10 주소에 접근, 한 바이트를 읽어 r9에 저장     	<< 0x8C
+			ldrb	lr, [r10, #1]				// lr: r10 주소에 접근해서 두번째 바이트 값 저장   	<< 0x73
+			orr	r9, r9, lr, lsl #8			// r9: lr값을 한바이트 left shift 해서 r9값과 더함 	<< 0x738C
+			ldrb	lr, [r10, #2]				// lr: r10 주소에 접근해서 세번째 바이트 값 저장   	<< 0x84
+			ldrb	r10, [r10, #3]				// r10: r10 주소에 접근해서 네번째 바이트 값 저장  	<< 0x00
+			orr	r9, r9, lr, lsl #16			// r9: lr값을 2바이트 left shift 해서 r9값과 더함  	<< 0x84738C
+			orr	r9, r9, r10, lsl #24			// r9: r10값을 3바이트 left shift 해서 r9값과 더함	<< 0x0084738C
+									=> r9: 실제 커널 사이즈 = 0x0084738C
 
-		#ifndef  CONFIG_ZBOOT_ROM
-			add 	sp, sp, r0
-			add	r10, sp, #0x10000
+		#ifndef  CONFIG_ZBOOT_ROM				// ROM or FLASH 에 있는 압축된 커널 이미지를 RAM으로 복사하지 않고 직접 구동해 사용하려고 하는 경우
+			add 	sp, sp, r0				// sp: +=offset 
+			add	r10, sp, #0x10000			// r10: += 64K	버퍼의 마지막 저장
 		#else
 			mov	r10, r6
 		#endif
@@ -528,7 +532,57 @@ SECTIONS					// SECTION   섹션들을 나누어놓고 나중에 하나의 실행파일로 만든다
 		---------------------------------------------------------------------------------------
 			dtb_check_done:
 			#endif
-				add	r10
+				add	r10, r10, #16384
+				cmp	r4, r10
+				bhs	wont_overwrite
+				add	r10, r4, r9
+				adr	r9, wont_overwrite
+				cmp	r10, r9
+				bls	wont_overwrite
+
+				add	r10, r10, #((reloc_code_end - restart + 256) & ~255)
+				bic	r10, r10, #255
+			
+				adr	r5, restart
+				bic	r5, r5, #31
+			
+			#ifdef	CONFIG_ARM_VIRT_EXT
+				mrs	r0, spsr
+				and	r0, r0, #MODE_MASK
+				cmp	r0, #HYP_MODE
+				bne	1f
+
+				bl	__hyp_get_vectors
+				sub	r0, r0, r5
+				add	r0, r0, r10
+				bl	__hyp_set_vectors
+			1:
+			#endif
+
+				sub	r9, r6, r5
+				add	r9, r9, #31
+				bic	r9, r9, #31
+				add	r6, r9, r5
+				add	r9, r9, r10
+
+			1:	ldmdb	r6!, {r0 - r3, r10 - r12, lr}
+				cmp	r6, r5
+				stmdb	r9!, {r0 = r3, r10 - r12, lr}
+				bhi	1b
+
+				sub	r6, r9, r6
+
+			#ifndef	CONFIG_ZBOOT_ROM
+				add	sp, sp, r6
+			#endif
+
+				bl	cache_clean_flush
+
+				adr	r0, BSYM(restart)
+				add	r0, r0, r6
+				mov	pc, r0
+
+427
 		---------------------------------------------------------------------------------------
 
 		#ifdef	CONFIG_ARM_ATAG_DTB_COMPAT 		<< unset
