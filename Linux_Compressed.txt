@@ -512,78 +512,81 @@ SECTIONS					// SECTION   섹션들을 나누어놓고 나중에 하나의 실행파일로 만든다
 									=> r9: 실제 커널 사이즈 = 0x0084738C
 
 		#ifndef  CONFIG_ZBOOT_ROM				// ROM or FLASH 에 있는 압축된 커널 이미지를 RAM으로 복사하지 않고 직접 구동해 사용하려고 하는 경우
-			add 	sp, sp, r0				// sp: +=offset 
-			add	r10, sp, #0x10000			// r10: += 64K	버퍼의 마지막 저장
+			add 	sp, sp, r0				// sp: +=offset (0x8000)
+			add	r10, sp, #0x10000			// r10: sp + 64K   << 버퍼의 마지막 저장
 		#else
-			mov	r10, r6
+			mov	r10, r6					// r10: r6: _edata 저장
 		#endif
-			mov	r5, #0
+			mov	r5, #0					// r5: 0
 		
-		#ifdef	CONFIG_ARM_APPENDED_DTB
-			ldr	lr, [r6, #0]
+안탐>>		#ifdef	CONFIG_ARM_APPENDED_DTB				// DTB: 장치확인	<< not set
+			ldr	lr, [r6, #0]				// lr: r6: _edata
 			
-		#ifndef	__ARMEB__
-			ldr	r1, =0xedfe0dd0
+		#ifndef	__ARMEB__					// BE or LE 처리
+			ldr	r1, =0xedfe0dd0				// r1 = 0xedfe0dd0
 		#else
 			ldr	r1, =0xd00dfeed
 		#endif	
 			cmp 	lr, r1
 			bne	dtb_check_done
-		---------------------------------------------------------------------------------------
+		~~~
 			dtb_check_done:
-			#endif
-				add	r10, r10, #16384
-				cmp	r4, r10
-				bhs	wont_overwrite
-				add	r10, r4, r9
-				adr	r9, wont_overwrite
-				cmp	r10, r9
-				bls	wont_overwrite
+		#endif						
+여기부터 탐>>		add	r10, r10, #16384			// r10: zImage 파일의 끝주소 + Page Table 16K
+			cmp	r4, r10					// r4: 커널의 시작주소
+			bhs	wont_overwrite				// r4 > r10 면 wont_overwrite 
+									=> 압축된 커널의 끝 + 페이지테이블 이 압축해제된 커널의 시작주소보다 아래에 존재
+			add	r10, r4, r9				// r10: r4:커널의 시작주소 + r9: 압축해제된 커널의 크기 = 압축해제된 커널의 끝주소
+			adr	r9, wont_overwrite			// r9: wont_overwrite의 물리주소 저장
+			cmp	r10, r9					// r10 과 r9 비교
+			bls	wont_overwrite				// r10 < r9 이면 wont_overwrite
+									=> wont_overwrite의 위치가 압축해제된 커널의 끝주소보다 위에 존재
 
-				add	r10, r10, #((reloc_code_end - restart + 256) & ~255)
-				bic	r10, r10, #255
+			add	r10, r10, #((reloc_code_end - restart + 256) & ~255)
+			bic	r10, r10, #255
+		
+			adr	r5, restart
+			bic	r5, r5, #31
 			
-				adr	r5, restart
-				bic	r5, r5, #31
-			
-			#ifdef	CONFIG_ARM_VIRT_EXT
-				mrs	r0, spsr
-				and	r0, r0, #MODE_MASK
-				cmp	r0, #HYP_MODE
-				bne	1f
+		#ifdef	CONFIG_ARM_VIRT_EXT
+			mrs	r0, spsr
+			and	r0, r0, #MODE_MASK
+			cmp	r0, #HYP_MODE
+			bne	1f
 
-				bl	__hyp_get_vectors
-				sub	r0, r0, r5
-				add	r0, r0, r10
-				bl	__hyp_set_vectors
-			1:
-			#endif
+			bl	__hyp_get_vectors
+			sub	r0, r0, r5
+			add	r0, r0, r10
+			bl	__hyp_set_vectors
+		1:
+		#endif
 
-				sub	r9, r6, r5
-				add	r9, r9, #31
-				bic	r9, r9, #31
-				add	r6, r9, r5
-				add	r9, r9, r10
+			sub	r9, r6, r5
+			add	r9, r9, #31
+			bic	r9, r9, #31
+			add	r6, r9, r5
+			add	r9, r9, r10
 
-			1:	ldmdb	r6!, {r0 - r3, r10 - r12, lr}
-				cmp	r6, r5
-				stmdb	r9!, {r0 = r3, r10 - r12, lr}
-				bhi	1b
+		1:	ldmdb	r6!, {r0 - r3, r10 - r12, lr}
+			cmp	r6, r5
+			stmdb	r9!, {r0 = r3, r10 - r12, lr}
+			bhi	1b
 
-				sub	r6, r9, r6
-
+			sub	r6, r9, r6
 			#ifndef	CONFIG_ZBOOT_ROM
-				add	sp, sp, r6
-			#endif
+			add	sp, sp, r6
+		#endif
 
-				bl	cache_clean_flush
+			bl	cache_clean_flush
 
-				adr	r0, BSYM(restart)
-				add	r0, r0, r6
-				mov	pc, r0
-
+			adr	r0, BSYM(restart)
+			add	r0, r0, r6
+			mov	pc, r0
 427
-		---------------------------------------------------------------------------------------
+		
+
+
+
 
 		#ifdef	CONFIG_ARM_ATAG_DTB_COMPAT 		<< unset
 		~~~
