@@ -3,7 +3,7 @@
 ### Week 17
 - 2017.09.09
 - Attendees : Go Myeongjun, Jo Gwanghyeon, Kang Seoyun, Lee Jeonghyeon, Park Daeyun
-- Notes : [source code] armv7_mmu_cache_on:(mmu and cache on val setting), restart:(until duplication check)
+- Notes : Review armv7_mmu_cache_on:(mmu and cache on val setting), restart:(until duplication check)
 
 ### Week 16
 - 2017.09.02
