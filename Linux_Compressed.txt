@@ -1,0 +1,607 @@
+
+DTS : 소스파일?
+DTC : 컴파일
+DTB : 바이너리파일 --> 보드 종속적인 내용들을 따로 뺌
+
+linux/arch/arm/boot/compressed/vmlinux.lds.S		--> 커널을 메모리에 올리는 작업
+
+object 파일들을 실행파일로 엮어주기 위해 링커가 필요 	--> lds
+링커 스크립트 : 오브젝트 파일들을 순서대로 메모리에 재배치해서 하나의 실행파일로 엮어준다
+
+lds 링커 스크립트  : .c,.o 를 엮어서 메모리에 재배치 	==> ELF 파일 생성
+-----------------------------------------------------------------
+1. linux -> vmlinux : 압축되지 않음
+
+2. vmlinux.lds 실행
+
+3. linux/arch/arm/boot/compressed ->vmlinux 
+     : 데이터영역: 압축된 이미지, 텍스트영역 : 압축을 푸는 코드
+
+4. zimage 파일로 커널 이미지 빌드
+----------------------------------------------------------------
+
+text_base : 커널 이미지의 시작주소
+text_offset : 실제 코드
+
+
+/**  vmlinux.lds.S   **/  : 링커 스크립트
+#ifdef CONFIG_CPU_ENDIAN_BE8
+#define ZIMAGE_MAGIC(x) (
+
+
+OUTPUT_ARCH(arm)				// achtecture를 arm으로 설정
+ENTRY(_start)					// ENTRY를 _start 로 
+SECTIONS					// SECTION   섹션들을 나누어놓고 나중에 하나의 실행파일로 만든다
+{
+  /DISCARD/ : {
+    *(.ARM.exidx*)
+    *(.ARM.extab*)
+
+    *(.data)
+  }
+  
+  . = TEXT_START;				// . = 현재 주소를 의미한다. 코드가 추가될 때마다 자동으로 주소 증가
+  _text = .;
+
+  .text : {
+    _start = .; 				// _start 를 .(현재주소)로 --> 0   --> 라즈베리파이 0x8000 에 
+    *(.start)
+    -----------------------------------------------------------------------------------------------
+
+    /**  head.S  **/
+    start:
+    	.type 	start, #function	// start 라는 함수라는 지시자
+	.rept	7			// 7번 반복
+	mov r0, r0			// NOP 과 같다 --> 버그 : ARM 아키텍처 메인 테이너인 Russell King이 어느 오래된 부트로더 하나가 0x20(32)번째 주소로 점프를 하는 관계로 
+								  커널이 호환성을 갖기위해 아무일도 하지않는 코드를 사용할 수 밖에 없었다고 한다.
+	.endr				// 반복문의 끝
+      ARM(	mov r0, r0	)	// ARM 형태라면  --> 8번째 mov  r0, r0 (오른쪽에서 왼쪽으로 연산 수행)
+      ARM(	b 1f		)	// 1f(forward : 앞으로 나올 코드에서 1:을 찾아 b(branch))
+    THUMB(	adr r12, BSYM(1f))	// THUMB 형태일 때 실행
+    THUMB(	bx r12		)
+
+
+	/**************************/	// jump
+	.word	_magic_sig
+	.word	_magic_start
+	.word	_magic_end
+	.word	0x04030201
+
+    THUMB(	.thumb		)
+	/**************************/
+
+
+    1:
+      ARM_BE8(	setend be	)	// 라즈베리 파이는 리틀엔디안 -> 안탐
+	-------------------------------------------------------------------------------------------
+	/**  linux/arch/arm/include/asm/assembler.h  **/
+	#ifdef CONFIG_CPU_ENDIAN_BE8	// CPU_ENDIAN_BE8 이 설정되어 있으면 (big endian인 경우)
+	#define ARM_BE8(code..) code	// code 대입
+	#else
+	#define ARM_BE8(code...)
+	#endif
+	-------------------------------------------------------------------------------------------
+	mrs  r9, cpsr			// cpsr 을 r9에 저장
+					// mrs : 상태 값을 레지스터로 넣어주는 명령어(s->r) 
+					// cpsr : current processor status register
+					// msr : 레지스터값을 상태로 지정 (r->s)
+					//** mrs, msr 은 상태값만 저장
+
+    #ifdef CONFIG_ARM_VIRT_EXT		// ARM_VIRT_EXT 가 config 되어 있으면 --> .config에서 확인
+	bl  __hyp_stub_install		// __hyp_stub_install 로 bl(현재위치(pc+#4)를 lr(r14)에 저장하고 점프)
+	    -------------------------------------------------------------------------------------------
+	    /**  linux/arch/arm/boot/compressed/hyp-stub.S  **/
+	    ENTRY(__hyp_stub_install)			// HYP MODE 인지 체크 (아니면 빠져)
+ 	    	store_primary_cpu_mode	r4, r5, r6
+	    ENDPROC(__hyp_stub_install)
+
+
+
+		   ------------------------------------------------------------------------------------
+		   /**  linux/arch/arm/compressed/hyp-stub.S  **/
+안탐 >>		   	#ifndef zImage
+
+			   .macro  store_primary_cpu_mode  reg1, reg2, reg3
+			    mrs  \reg1, cpsr				// cpsr을 reg1에 저장(r4)
+			    and  \reg1, \reg1, #MODE_MASK		// #MODE_MASK : #31(1f)  하위5비트(상태비트 : Mode bits M[4:0]) 마스킹
+									// reg1 에 상태비트 마스킹(&연산)해서 reg1에 넣음
+									// 현재 모드는 0x13 (0b10011 SVC MODE)
+			    adr  \reg2, .L__boot_cpu_mode_offset	// reg2(r5)의 주소에 offset 값 저장 
+									// (adr : 메모리값을 레지스터에 저장)
+									// (mov : 레지스터-레지스터 값 저장)
+			    -------------------------------------------------------------------------------
+				/**  linux/arch/arm/compressed/hyp-stub.S  **/
+				.L__boot_cpu_mode_offset:
+					.long   __boot_cpu_mode - .	// .long에 __boot_cpu_mode 와 현재주소(. = .L__boot_cpu_mode_offset)의 차
+									// (offset : 메모리 물리주소)을 저장
+					-----------------------------------------------------------------------
+						ENTRY(__boot_cpu_mode)
+					-----------------------------------------------------------------------
+				-------------------------------------------------------------------------------
+			   ldr  \reg3, [\reg2]			// reg3(r6)에 reg2(메모리 물리주소)에 해당하는 메모리에 들어있는 값을 저장
+			   str  \reg1, [\reg2, \reg3]		// reg1(SVC MODE)를 reg2에 저장된 메모리 주소에서 reg3만큼 이동한 메모리 공간에 저장
+								// [] : 포인터 개념
+			   .endm
+
+			   .macro  compare_cpu_mode_with_primary  mode, reg1, reg2, reg3
+			    adr  \reg2, .L__boot_cpu_mode_offset
+			    ldr  \reg3, [\reg2]
+			    ldr  \reg1, [\reg2, \reg3]
+			    cmp  mode, \reg1
+  			    orrne  \reg1, \reg1, #BOOT_CPU_MODE_MISMATCH
+			    strne  \reg1, [\reg2, \reg3]
+			   .endm
+
+우리는 이거 탐>>	#else  /*  ZIMAGE  */  << 우리는 zimage 있어
+ 			   .macro  stroe_primary_cpu_mode  reg1:req, reg2:req, reg3:req
+			   .endm
+
+			   .macro  compare_cpu_mode_with_primary  mode, reg1, reg2, reg3
+			    cmp  \mode, \mode
+   			   .endm
+		
+		  	#endif
+
+		   ------------------------------------------------------------------------------------
+
+	    ENTRY(__hyp_stub_install)			// ENTRY : 링커에게 점프 레이블 알려줌
+ 	    	store_primary_cpu_mode	r4, r5, r6	// HYP MODE 인지 체크 (아니면 빠져)
+	    ENDPROC(__hyp_stub_install)			// ENDPROC : 링커에게 알려주는 역할
+
+
+	    ENTRY(__hyp_stub_install_secondary)
+		mrs  r4, cpsr					// r4에 cpsr 저장
+		and  r4, r4, #MODE_MASK				// MODE bit(0x1f) &연산으로 마스킹
+		
+		compare_cpu_mode_with_primary  r4, r5, r6, r7	// ==> cmp  \r4, \r4
+		retne  lr					// return not equal
+		
+		cmp r4, #HYP_MODE(#28)				// ==> cmp  \r4, #26 
+		retne  lr					// 우리는 SVC 모드이므로 lr로 탈출
+
+	    HYP mode
+   	    -------------------------------------------------------------------------------------------
+
+	    ==> 실제 동작
+		cmp  r4, r4
+		bxne  lr
+		cmp  r4, #26	// HYP MODE
+		bxne  lr
+
+   	        /***********************************/
+
+ 		  #31 : 1F    : MODE BIT MASKING
+		  #26 : 11010 : HYP MODE
+
+	        /***********************************/
+	    -------------------------------------------------------------------------------------------
+    #endif
+
+	/* 디자인, 규격  0xC43  나중에 사용하기 위해 뒤의 레지스터에 밀어넣어 둠 */
+					=> 부트로더에서 r1, r2에 저장되어 있던 정보
+	mov  r7, r1 			// r7에 architecture ID 저장
+	mov  r8, r2			// r8에 atags pointer 저장
+
+
+	mrs  r2, cpsr			// r2에 cpsr 저장   --> 0x1D3  :  0001 1101 0011  : 현재 SVC MODE
+	tst  r2, #3			// 비트0, 비트1이 모두 0인 경우 user mode (10000)
+					==> tst : &연산 결과값이 모두 0인지 확인   
+
+	bne  not_angel			// bne : 현재 &연산 값이 11 이므로 not equal 
+					==> not_angel 수행
+	-----------------------------------------------------------------------------------------------
+		not_angel:
+			safe_svcmode_maskall  r0			// 상태비트를 SVC MODE 로 셋
+			-------------------------------------------------------------------------------
+			/* /linux/arch/arm/include/asm/assembler.h */	
+			.macro  safe_svcmode_maskall  reg:req		(required: reg 변수를 안넘기면 에러처리)
+				#if __LINUX_ARM_ARCH__  >= 6 && !defined(CONFIG_CPU_V7M)    << 탐
+					mrs  \reg, cpsr			// r0에 cpsr 저장 : 0x1D3 (SVC MODE)
+					eor  \reg, \reg, #HYP_MODE	// cpsr이 HYP_MODE(#26) 인지 체크
+									   -> xor : HYP모드(11010)이면 0
+					tst  \reg, #MODE_MASK		// 상태비트 (#31 : 0x1F) 와 &연산 결과값이 0인지 확인
+									==> tst : 기존의 값에 영향을 주지 않고 &연산 결과값을 알 수 있다
+									==> 결과값이 같으면 : 0이면 Z비트 1 셋(0이니까 Z플래그 1)
+									==> 결과값이 다르면 : 1이면 Z비트 0 셋(0이 없으니까 Z플래그 0)
+					bic  \reg, \reg, #MODE_MASK	// bit clear : MODE BIT 를 0으로 
+					orr  \reg, \reg, #PSR_I_BIT | PSR_F_BIT | SVC_MODE
+									// PSR_I_BIT : IRQ disable
+									// PSR_F_BIT : FIQ disable
+									// --> SVC ORR : 상태비트를 슈퍼바이저 모드로 돌아가도록 처리
+
+				THUMB(orr  \reg, \reg, #PSR_I_BIT	)
+					bne 1f				// 1f로 점프
+									// Z 플래그가 0일 때 수행 (같으면 cmp 결과값이 0 -> Z 플래그 1)
+									==> Z 플래그 1 : 같다
+									==> Z 플래그 0 : 다르다
+					orr  \reg, \reg, #PSR_A_BIT
+					adr  lr, BSYM(2f)
+					msr  spsr_cxsf, \reg
+					__MSR_ELR_HYP(14)
+					__ERET
+					---------------------------------------------------------------
+						/* /linux/arch/arm/include/asm/opcodes.h */
+						#define __MSR_ELR_HYP(regnum)  __inst_arm_thumb32(
+							0xE12EF300 | regnum,
+							0xF3808E30 | (regnum << 16)
+						)
+
+						#define __ERET  __inst_arm_thumb32(
+							0xE160006E,
+							0xF3DE8F00
+						)
+					---------------------------------------------------------------
+	
+				1:	msr  cpsr_c, \reg		// cpsr_c(cpsr의 하위8비트 : Control bit) 에 r0값 저장
+				2:
+				#else
+					setmode  PSR_F_BIT | PSR_I_BIT | SVC_MODE, \reg
+				#endif
+				.endm					// macro 끝 탈출
+			-------------------------------------------------------------------------------
+			msr  spsr_cxsf, r9		// spsr_cxsf 에 r9(저장해 두었던 cpsr) 값 저장
+							// spsr(Saved PSR) : cpsr 백업
+							// c(control)[1-7] x(extension)[8-15] s(status)[9-23] f(flags)[24-31]
+			.text				
+
+			/************************************************/
+			  ddd 실행 시 endeq  r0, r0, r0 반복됨
+			  => nop 코드 : 명령어의 자릿수 맞춰주는 역할
+			/************************************************/		
+
+		#ifdef CONFIG_AUTO_ZRELADDR		// 안탐
+			mov  r4, pc
+			and r4, r4, #0xf8000000
+			add r4, r4, #TEXT_OFFSET
+		#else
+			ldr  r4, =zreladdr		// ldr  r4, [pc, #2104]
+							// zreladdr -> Makefile에 저장되어 있는 오프셋 값을 얻어옴
+							// 커널을 올리는 주소 (zreladdr) : 0x8000	
+							==> r4 에 0x8000 저장
+							==> zreladdr : /linx/arch/arm/mach-bcm2709/Makefile.boot 에 저장되어있음							
+		#endif
+
+			mov  r0, pc			// r0에 pc 값 저장
+							==> [pipeline] pc : fetch 될 명령어 가리킴
+							==> 다음 다음 명령어 -> 여기서는 ldrcc를 가리킴
+			cmp  r0, r4			// pc 값과 r4 비교
+
+			// 캐리지 리턴이 셋 되어 있지 않으면 코드 진입
+			// cc : Carier Clear : r0-r4 결과 r4>r0 일 때 동작
+				/************************************************************/
+				ex) r0 : 80ac, r4 : 8000 인 경우
+				    r0 - r4
+				    0x00008000 를 2의 보수 취한 후 + r0 해야 하는데
+				    0xFFFF7FFF -> 0xFFFF8000 이므로 캐리발생
+				/************************************************************/
+187			ldrcc  r0, LC0+32		// r0에 커널의 전체 크기 저장
+			-------------------------------------------------------------------------------
+				LC0:	.word LC0
+					.word  __bss_start
+					.word  _end
+					.word  _edata
+					.word  input_data_end
+					.word  _got_start
+					.word  _got_end
+					.word  .L_user_stack_end
+					.word  _end - restart + 16384 + 1024*1024   << 이거 : zImage 크기 + 16K PTE + 1M DTB 영역
+										    // _end : 커널의 끝주소
+					.size  LC0, . - LC0
+			-------------------------------------------------------------------------------
+			addcc  r0, r0, pc		// r0 = zImage의 크기 + 현재 나의 위치
+			cmpcc  r4, r0			// 압축 해제할 커널의 시작 주소와 비교
+							// 실행중인 zImage가 PTE 를 침범하지 않을만큼 충분히 아래에 있는지 체크
+			orrcc  r4, r4, #1		// r4<r0 인 경우(침범) 실행     -->  cache_on 을 보류했음을 기억하기위한 작업
+			blcs  cach_on			// r4>r0 인 경우(노상관) 실행	<< 현재 pc > 8000 이므로 carry set 이거 탐
+							// blcs 복귀주소 저장?
+			--------------------------------------------------------------------------------
+			/** head.S **/
+					.align 5				// 주소의 하위 비트를 0으로 셋팅해줌 
+										// 2의 5승 : 32byte 정렬 : 페이지 테이블 설정 때문
+				cache_on:	mov  r3, #8			// r3에 #8 저장
+					b	call_cache_fn
+				-----------------------------------------------------------------------
+					call_cache_fn:	adr  r12, proc_types	// r12에 proc_type 저장
+					---------------------------------------------------------------
+							.align	2
+							.type	proc_types, #object	
+						proc_types:					// 장치 정보
+							.word	0x41000000
+							.word	0xff00f000
+							mov  pc, lr
+						 THUMB(	nop	)
+							mov  pc, lr
+						 THUMB( nop	)
+							mov  pc, lr
+						 THUMB( nop	)
+							
+							.word	0x41007000
+							.word	0xfff8fe00
+							mov  pc, lr
+						 THUMB( nop	)
+							mov  pc, lr
+						 THUMB( nop	)
+							mov  pc, lr	
+						 THUMB( nop	)	
+							.word	0x41807200			
+							.word	0xffffff00			
+							W(b)	__armv4_mmu_cache_on		
+							W(b)	__armv4_mmu_cache_off
+							mov	pc, lr
+					...
+
+							.word	0x000f0000	@ new CPU ID 	<< value
+							.word	0x000f0000			<< mask
+							W(b)	__armv7_mmu_cache_on		<< 3번째(#8) cache_on 
+							W(b)	__armv7_mmu_cache_off		 
+							W(b)	__armv7_mmu_cache_flush
+
+					---------------------------------------------------------------
+					#ifdef  CONFIG_CPU_CP15
+						mrc  p15, 0, r9, c0, c0			// r9 에 Processor ID 받아옴
+					#else
+						ldr  r9, =CONFIG_PROCESSOR_ID
+					#endif
+											=> 해당 타겟을 찾기 위한 반복문
+					1:	ldr  r1, [r12, #0]			// proc_type value
+						ldr  r2, [r12, #4]			// proc_type mask
+						eor  r1, r1, r9				// 비교
+						tst  r1, r2				// 비교 
+					   ARM(		addeq  pc, r12, r3	)	// r3: cache_on 실행
+					 THUMB(		addeq  r12, r3		)
+					 THUMB(		moveq  pc, r12		)
+						add r12, r12, #PROC_ENTRY_SIZE(20byte)	// 일치하지 않는 경우 다음 proc_type 으로 점프
+											==> proc_type 의 크기 20byte 이므로 20byte씩 점프해서 다음 타겟 비교
+						b  1b
+
+				-----------------------------------------------------------------------
+
+				__armv7_mmu_cache_on:
+					mov	r12, lr					// r12에 복귀주소 저장
+				#ifdef CONFIG_MMU					=> MMU가 있는지 확인하는 로직
+					mrc	p15, 0, r11, c0, c1, 4			// r11에 코프로세서 정보(MMU ID 값?) 저장
+					tst	r11, #0xf				// vmsa(Virtual Memory System Archtecture)
+											=> 현재 0101 -> not equal
+					
+					movne	r6, #CB_BITS | 0x02			// CB_BITS(0x0C)
+											// 0x02 >> Page table의 Section Entry Descriptor 상태플래그 설정 후 r6에 저장
+
+						/**************************************/
+						  #ifdef CONFIG_CPU_DCACHE_WRITETHROUGH 
+						  ==> 캐시와 메모리를 한번에 업데이트
+						  #define	 CB_BITS  0x08
+						  #else
+						  #define  CB_BITS  0x0C
+						  #endif
+						/**************************************/	
+	
+					blne	__setup_mmu	
+					---------------------------------------------------------------
+						__setup_mmu:	sub r3, r4, #16384	// r3 : r4(0x8000) - 16Kb(PageTable 크기) = 0x4000 
+											==> r3 == PageTable 의 시작점
+							bic	r3, r3, #0xff		// 비트클리어
+							bic	r3, r3, #0x3f00		// 0x3fff로는 한번에 비트클리어 불가능하기 때문에 나눠서 비트클리어(길이제한)
+
+							mov	r0, r3			// r0에 r3: PageTable 시작점 저장
+							mov	r9, r0, lsr #18		// r9: r0 right shift 18  >> descriptor clear
+							mov 	r9, r9, lsl #18		// r9: r9 left shift 18
+											=> r9: DRAM의 시작주소
+							add	r10, r9, #0x10000000	// r10: DRAM의 끝주소(256Mb)
+
+							mov 	r1, #0x12		// r1: 0x12 >> 0x00010010
+							orr	r1, r1, #3 << 10	// r1: 0x110000000000 | 0x00010010 = 0x110000010010
+											=> Descriptor : AP, XN(이 메모리의 값을 실행시키지 않겠다), 1 set
+							add	r2, r3, #16384		// r2: r3 + 16KB = PageTable의 끝주소 => PT size = 4byte x 16384 = 4GB..?
+						1:	cmp	r1, r9			// r9(DRAM 시작주소)와 r1 비교
+							cmphs	r10, r1			// hs: r1>r9 이면 r10(DRAM 끝주소)와 r1 비교
+											>> hs(high or same): 크거나 같으면 실행
+							bic	r1, r1, #0x1c		// descriptor 비트클리어
+							orrlo	r1, r1, #0x10		// r1<r10 일 때: DRAM size 밖인 경우 0x0C12 실행
+							orrhs	r1, r1, r6		// r1<=r10 일 때: DRAM size 안인 경우 0x0C0E 실행
+											// r6: descriptor Setting
+							str	r1, [r0], #4		// PageTable 에 r1 한 줄 추가 후 r0: 다음주소 셋팅
+							add	r1, r1, #1048576	// r1+= 1M ==> Section Base Address 1씩 증가
+							teq	r0, r2			// r0: Page Section Address, r2: PageTable 마지막 주소
+							bne	1b			// 같지 않으면 1: 로 브랜치 -> 반복
+						
+							orr	r1, r6, #0x04		// r6: 0x0E | (B:bufferable)0x04 => r1: 0x0E
+							orr	r1, r1, #3 << 10	// r1: 0xC0E => AP11(full_access) | C | B
+							mov	r2, pc			// r2: pc => 현재 실행 중인 위치에서 
+							mov	r2, r2, lsr #20		// lsr, lsl로 하위 20byte 제거 => PageTable의 index get
+							orr	r1, r1, r2, lsl #20	// 현재 위치에 r1: 0xC0E(access allow) 허용 
+							add	r0, r3, r2, lsl #2	// r0 = r3: PTE 시작주소 + 현재위치(PTE index)*4 => 해당 인덱스의 물리주소
+							str	r1, [r0], #4		// r1: index 를 r0위치에 저장하고 r0+1
+							add	r1, r1, #1048576	// r1의 index+1 => 2M 확보(충분한 공간)
+							str	r1, [r0]		// r1: 증가된 index(다음 인덱스) 를 r0위치에 저장
+							mov	pc, lr			// 복귀
+						ENDPROC(__setup_mmu)
+
+					---------------------------------------------------------------
+					mov	r0, #0					// r0 에 0 저장 -> mcr 명령이 잘 동작할 수 있도록 0 셋?
+											=> in order excution : ISB(Intruction Synchronization Barrier) 구현? 파이프 라인을 비우는 효과		
+					mcr	p15, 0, r0, c7, c10, 4			// coprocessor 값에 r0
+					tst	r11, #0xf				// VMSA 상태 확인
+					mcrne	p15, 0, r0, c8, c7, 0			// not equal 인 경우: MMU 사용하는 아키텍쳐인 경우 flush I(Instruction),D(Data),TLBs(:페이지 테이블의 캐시같은 역할)
+
+						/********************************************************************************************************************/
+						 *flush : cache의 내용을 동기화 없이 그냥 삭제 시켜버리는 것이다                                                    *
+						 *clean : cache의 내용중에서 dirty된 내용이 있으면, 메모리에 동기화 시켜주고 cache를 flush해 주는 것이다            *
+						 *drain : write buffer에서 메모리에 쓰는것을 의미한다                                                               *
+						 *invalidate : dirty 비트를 무력화 시키는 것을 의미한다 즉 flush와 같은 의미로 ARM에서는 같게 사용 되는 경우가 많다 *
+						/********************************************************************************************************************/
+
+				#endif
+					mrc	p15, 0, r0, c1, c0, 0			// r0: coprocessor로부터 SCTLR(System Control Register) 받아옴
+					bic 	r0, r0, #1 << 28			// clear SCTLR.TRE >> TRE 비트를 0으로 셋 
+											=> TEX: 
+											=> TEX Remap disable: page table의 description 중 TEX 비트를 사용하지 않을 것
+											=> TEX[2:0], C, B는 MMU Remap register 와 함께 memory region 속성으로 사용
+					orr 	r0, r0, #0x5000				// I-cache(Instruction Cache Enable), RR-cache replacement 설정(cache replacement 방법을 RR(Round Robin)로 설정)
+					orr	r0, r0, #0x003c				// Write Buffer 사용CP15BEN, C(Data Cache Enable) set
+											=> RAO: Read As One
+											=> SBOP: Should Be One Preserved
+					bic	r0, r0, #2				// set A: Access fault 지원 위한 mask
+					orr	r0, r0, #1 << 22			// set U: Unaligned Access 지원(armv7에서는 항상 1)
+				#ifdef CONFIG_MMU
+			 	 ARM_BE8(	orr r0, r0, #1 << 25	)		
+					mrcne	p15, 0, r6, c2, c0, 2			// r6에 TTB Control Register 값 읽어옴		
+											=> TTB: Translation Table Base Address: Page Table 의 위치
+					orrne	r0, r0, #1				// MMU Enable
+					movne	r1, #0xfffffffd				// r1: domain 설정 DOMAIN 0 = 01: client
+											=> domain: 개별적 접근 권한을 갖도록 정의된 메모리 영역 DACR register로 16개까지의 도메인 지정
+											=> manager, client, no access에 따라 AP(Access Permision) 확인
+					bic	r6, r6, #1 << 31			// r6: TTBCR.PXN=0: 32bit 페이지 변환을 사용
+					bic 	r6, r6, #3 << 0				// r6: TTBCR.N=0: 16K 페이지 테이블 사용
+											=> TTBR0 만 사용
+					mcrne	p15, 0, r3, c2, c0, 0			// r3: start page table 을 TTBR0(Translation Table Base Register) 에 저장
+					mcrne	p15, 0, r1, c3, c0, 0			// r1: domain access control 을 DACR 에 저장
+					mcrne	p15, 0, r6, c2, c0, 2			// r6: 32bit,N  TTBCR 에 저장
+				#endif
+					mcr	p15, 0, r0, c7, c5, 4			// ISB
+					mcr	p15, 0, r0, c1, c0, 0			// load r0: SCTLR(System Control Register)
+											=> r0: 설정한 SCTLR값을 c1: SCTLR 로 밀어넣음
+											=> MMU on
+					mrc	p15, 0, r0, c1, c0, 0			// read back
+					mov	r0, #0					// drain pipeline
+					mcr	p15, 0, r0, c7, c5, 4			// ISB
+					mov	pc, r12					// r12: 복귀주소로 복귀
+			--------------------------------------------------------------------------------
+		----------------------------------------------------------------------------------------
+		/** 압축이 풀리는 위치와 현재 압축된 커널의 공간이 중복되는 경우 현재 실행중인 코드를 재배치 **/
+		restart:  adr	r0, LC0					// r0에 LC0 객체 주소 저장
+									=> ldr 을 사용하지 않는 이유: ldr은 컴파일 시 계산된 상대주소 참조 -> 파일재배치 고려해 adr(절대주소 참조) 사용
+			-------------------------------------------------------
+				LC0:	.word	LC0
+					.word	__bss_start
+					.word	_end
+					.word	_edata
+					.word	input_data_end -4
+					.word	_got_start
+					.word	_got_end
+					.word	.L_user_stack_end
+					.word	_end - restart + 16384 + 1024*1024
+					.size	LC0, . - LC0
+			-------------------------------------------------------
+
+			ldmia	r0, {r1,r2,r3,r6,r10,r11,r12}		// r1:r12 에 LC0 값 차례로 저장
+				/*****************************/
+				  r1: 	LC0
+				  r2: 	__bss_start
+				  r3: 	_end
+				  r6:	_edata
+				  r10:	input_data_end - 4
+				  r11:	_got_start
+				  r12:	_got_end
+				/*****************************/
+			ldr	sp, [r0, #28]				// sp에 LC0 의 8번째 .L_user_stack_end 저장
+
+			sub	r0, r0, r1				// r0: LC0의 offset 값 저장
+			add	r6, r6, r0				// r6: _edata:  data 영역의 끝 주소
+			add	r10, r10, r0				// r10: 압축해제된 커널의 길이가 들어있는 곳의 주소 + offset
+									=> little endian 방식으로 기록된다.
+
+			/** little endian 으로 기록된 값을 제대로 바꾸기 위해 쪼개는 과정 **/
+			ldrb	r9, [r10, #0]				// r9: r10:압축해제된 커널의 길이가 들어있는 곳의 주소	<< 0x3d1323
+									=> r10 주소에 접근, 한 바이트를 읽어 r9에 저장     	<< 0x8C
+			ldrb	lr, [r10, #1]				// lr: r10 주소에 접근해서 두번째 바이트 값 저장   	<< 0x73
+			orr	r9, r9, lr, lsl #8			// r9: lr값을 한바이트 left shift 해서 r9값과 더함 	<< 0x738C
+			ldrb	lr, [r10, #2]				// lr: r10 주소에 접근해서 세번째 바이트 값 저장   	<< 0x84
+			ldrb	r10, [r10, #3]				// r10: r10 주소에 접근해서 네번째 바이트 값 저장  	<< 0x00
+			orr	r9, r9, lr, lsl #16			// r9: lr값을 2바이트 left shift 해서 r9값과 더함  	<< 0x84738C
+			orr	r9, r9, r10, lsl #24			// r9: r10값을 3바이트 left shift 해서 r9값과 더함	<< 0x0084738C
+									=> r9: 실제 커널 사이즈 = 0x0084738C
+
+		#ifndef  CONFIG_ZBOOT_ROM				// ROM or FLASH 에 있는 압축된 커널 이미지를 RAM으로 복사하지 않고 직접 구동해 사용하려고 하는 경우
+			add 	sp, sp, r0				// sp: +=offset (0x8000)
+			add	r10, sp, #0x10000			// r10: sp + 64K   << 버퍼의 마지막 저장
+		#else
+			mov	r10, r6					// r10: r6: _edata 저장
+		#endif
+			mov	r5, #0					// r5: 0
+		
+안탐>>		#ifdef	CONFIG_ARM_APPENDED_DTB				// DTB: 장치확인	<< not set
+			ldr	lr, [r6, #0]				// lr: r6: _edata
+			
+		#ifndef	__ARMEB__					// BE or LE 처리
+			ldr	r1, =0xedfe0dd0				// r1 = 0xedfe0dd0
+		#else
+			ldr	r1, =0xd00dfeed
+		#endif	
+			cmp 	lr, r1
+			bne	dtb_check_done
+		~~~
+			dtb_check_done:
+		#endif						
+여기부터 탐>>		add	r10, r10, #16384			// r10: zImage 파일의 끝주소 + Page Table 16K
+			cmp	r4, r10					// r4: 커널의 시작주소
+			bhs	wont_overwrite				// r4 > r10 면 wont_overwrite 
+									=> 압축된 커널의 끝 + 페이지테이블 이 압축해제된 커널의 시작주소보다 아래에 존재
+			add	r10, r4, r9				// r10: r4:커널의 시작주소 + r9: 압축해제된 커널의 크기 = 압축해제된 커널의 끝주소
+			adr	r9, wont_overwrite			// r9: wont_overwrite의 물리주소 저장
+			cmp	r10, r9					// r10 과 r9 비교
+			bls	wont_overwrite				// r10 < r9 이면 wont_overwrite
+									=> wont_overwrite의 위치가 압축해제된 커널의 끝주소보다 위에 존재
+
+			add	r10, r10, #((reloc_code_end - restart + 256) & ~255)
+			bic	r10, r10, #255
+		
+			adr	r5, restart
+			bic	r5, r5, #31
+			
+		#ifdef	CONFIG_ARM_VIRT_EXT
+			mrs	r0, spsr
+			and	r0, r0, #MODE_MASK
+			cmp	r0, #HYP_MODE
+			bne	1f
+
+			bl	__hyp_get_vectors
+			sub	r0, r0, r5
+			add	r0, r0, r10
+			bl	__hyp_set_vectors
+		1:
+		#endif
+
+			sub	r9, r6, r5
+			add	r9, r9, #31
+			bic	r9, r9, #31
+			add	r6, r9, r5
+			add	r9, r9, r10
+
+		1:	ldmdb	r6!, {r0 - r3, r10 - r12, lr}
+			cmp	r6, r5
+			stmdb	r9!, {r0 = r3, r10 - r12, lr}
+			bhi	1b
+
+			sub	r6, r9, r6
+			#ifndef	CONFIG_ZBOOT_ROM
+			add	sp, sp, r6
+		#endif
+
+			bl	cache_clean_flush
+
+			adr	r0, BSYM(restart)
+			add	r0, r0, r6
+			mov	pc, r0
+427
+		
+
+
+
+
+		#ifdef	CONFIG_ARM_ATAG_DTB_COMPAT 		<< unset
+		~~~
+	-----------------------------------------------------------------------------------------------
+	mov  r0, #0x17
+     ARM(	swi 0x123456	)
+
+
+
+    ---------------------------------------------------------------------------------------------------
+    *(.text)
+    *(.text.*)
+    *(.fixup)
+    *(.gnu.warning)
+    *(.glue_7t)
+    *(.glue_7)
+  }
+  .rodata :{
