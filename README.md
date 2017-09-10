@@ -1,10 +1,14 @@
 # Linux Kernel Reading
 
+### Week 17
+- 2017.09.09
+- Attendees : Go Myeongjun, Jo Gwanghyeon, Kang Seoyun, Lee Jeonghyeon, Park Daeyun
+- Notes : [source code] armv7_mmu_cache_on:(mmu and cache on val setting), restart:(until duplication check)
+
 ### Week 16
 - 2017.09.02
 - Attendees : Go Myeongjun, Jo Gwanghyeon, Lee Jeonghyeon, Park Daeyun, Song Wonsik
 - Notes : [source code] lockedp_init(), set_task_stack_end_magic(), earyly_trap_init() 
-
 
 ### Week 15
 - 2017.08.26
