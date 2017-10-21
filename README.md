@@ -1,5 +1,15 @@
 # Linux Kernel Reading
 
+### Week 19
+- 2017.10.22
+- Attendees : Go Myeongjun, Jo Gwanghyeon, Kang Seoyun, Lee Jeonghyeon, Park Daeyun
+- Notes : [source code] lockdep_init(), set_task_stack_end_magic(), smp_setup_processor_id(), debug_objects_early_init(), boot_init_stack_canary()
+
+### Week 18
+- 2017.09.23
+- Attendees : Jo Gwanghyeon, Kang Seoyun, Lee Jeonghyeon, Park Daeyun
+- Notes : [source code] stext label
+
 ### Week 17
 - 2017.09.09
 - Attendees : Go Myeongjun, Jo Gwanghyeon, Kang Seoyun, Lee Jeonghyeon, Park Daeyun
@@ -18,12 +28,12 @@
 ### Week 14
 - 2017.08.12
 - Attendees : Go Myeongjun, Jo Gwanghyeon, Kang Seoyun, Lee Jeonghyeon, Park Daeyun, Song Wonsik, Yoo Jihyeok
-- Notes : [Lable of source code] v7_ca7mp_setup:, enable_mmu:, mmap_swiched:
+- Notes : [Label of source code] v7_ca7mp_setup:, enable_mmu:, mmap_swiched:
 
 ### Week 13
 - 2017.08.05
 - Attendees : Go Myeongjun, Jo Gwanghyeon, Kang Seoyun, Lee Jeonghyeon, Park Daeyun, Song Wonsik, Yoo Jihyeok
-- Notes : [Lable of source code] lookup_processor_type:, vet_atags:, fixup_smp:, create_page_table:
+- Notes : [Label of source code] lookup_processor_type:, vet_atags:, fixup_smp:, create_page_table:
 
 ### Week 12
 - 2017.07.29
@@ -33,7 +43,7 @@
 ### Week 11
 - 2017.07.22
 - Attendees : Go Myeongjun, Jo Gwanghyeon, Kang Seoyun, Lee Geonhui, Lee Jeonghyeon, Park Daeyun, Song Wonsik
-- Notes : [Lable of source code] not_relocated:, wont_overwrite:
+- Notes : [Label of source code] not_relocated:, wont_overwrite:
 
 ### Week 10
 - 2017.07.15
@@ -43,7 +53,7 @@
 ### Week 9
 - 2017.07.08
 - Attendees : Go Myeongjun, Jo Gwanghyeon, Kang Seoyun, Lee Geonhui, Lee Jeonghyeon, Park Daeyun, Song Wonsik
-- Notes : [Lable of source code] cache_on:, __setup__mmu:
+- Notes : [Label of source code] cache_on:, __setup__mmu:
 
 ### Week 8
 - 2017.07.01
@@ -53,7 +63,7 @@
 ### Week 7
 - 2017.06.24
 - Attendees : Go Myeongjun, Jo Gwanghyeon, Kang Seoyun, Lee Geonhui, Lee Jeonghyeon, Park Daeyun, Song Wonsik
-- Notes : [Lable of source code] start:, not_angel:
+- Notes : [Label of source code] start:, not_angel:
 
 ### Week 6
 - 2017.06.17
