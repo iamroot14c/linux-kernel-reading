@@ -1,7 +1,22 @@
 # Linux Kernel Reading
 
+### Week 22
+- 2017.11.18
+- Attendees : Go Myeongjun, Jo Gwanghyeon, Kang Seoyun, Lee Jeonghyeon, Park Daeyun
+- Notes : [source code] unwind_init()
+
+### Week 21
+- 2017.11.11
+- Attendees : Jo Gwanghyeon, Kang Seoyun, Lee Jeonghyeon, Park Daeyun
+- Notes : [source code] boot_cpu_init(), page_address_init()
+
+### Week 20 
+- 2017.10.28
+- Attendees : Go Myeongjun, Jo Gwanghyeon, Kang Seoyun, Lee Jeonghyeon, Park Daeyun
+- Notes : [source code] cgroup_init_early()
+
 ### Week 19
-- 2017.10.22
+- 2017.10.21
 - Attendees : Go Myeongjun, Jo Gwanghyeon, Kang Seoyun, Lee Jeonghyeon, Park Daeyun
 - Notes : [source code] lockdep_init(), set_task_stack_end_magic(), smp_setup_processor_id(), debug_objects_early_init(), boot_init_stack_canary()
 
